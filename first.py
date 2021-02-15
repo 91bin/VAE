@@ -30,55 +30,56 @@ def main():
 class VAE(nn.Module):
 	def __init__(self):
 		super(VAE, self).__init__()
-		self.conv1 = nn.Conv2d(3,6, 3)
+		self.conv1 = nn.Conv2d(3,6, 3, padding=1)
 		self.pool = nn.MaxPool2d(2,2)
-		self.conv2 = nn.Conv2d(6, 16, 3)
-		self.fc1 = nn.Linear(16*6*6, 120)
+		self.conv2 = nn.Conv2d(6, 16, 3, padding=1)
+		self.fc1 = nn.Linear(16*8*8, 120)
 		self.fc2 = nn.Linear(120, 84)
 		self.fc3 = nn.Linear(84,10)
 		self.fc3_ = nn.Linear(10, 84)
 		self.fc2_ = nn.Linear(84, 120)
-		self.fc1_ = nn.Linear(120, 16*6*6)
-		self.conv2_ = nn.Conv2d(16,6,3)
-		self.conv1_ = nn.Conv2d(6,3,3)
+		self.fc1_ = nn.Linear(120, 16*8*8)
+		self.conv2_ = nn.Conv2d(16,6,3, padding=1)
+		self.conv1_ = nn.Conv2d(6,3,3, padding=1)
 		self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
 	def forward(self, x):
-		#encoder
-		x = self.pool(F.relu(self.conv1(x)))
-		x = self.pool(F.relu(self.conv2(x)))
-		x = x.view(-1, 16*6*6)
+		x = F.relu(self.conv1(x))
+		x = self.pool(x)
+		x = F.relu(self.conv2(x))
+		x = self.pool(x)
+		x = x.view(-1, 16*8*8)
 		x = F.relu(self.fc1(x))
 		x = F.relu(self.fc2(x))
 		x = self.fc3(x)
 
-		#decoder
 		x = self.fc3_(x)
 		x = F.relu(self.fc2_(x))
 		x = F.relu(self.fc1_(x))
-		x = x.view(-1,16,6, 6)
+		x = x.view(-1,16,8, 8)
 		x = F.relu(self.conv2_(self.upsample(x)))
 		x = F.relu(self.conv1_(self.upsample(x)))
-		x = self.decoder(f)
 		return x
 
 def train(train_loader, PATH):
-	net = VAE()
+	DEVICE = torch.device('cpu')
+	net = VAE().to(DEVICE)
 	criterion = nn.MSELoss()
 	optimizer = optim.SGD(net.parameters(), lr = 0.001, momentum = 0.9)
 
 	for epoch in range(0, 1):
 		running_loss = 0.0
-		for i, data in enumerate(train_loader):
+		for batch_idx, data in enumerate(train_loader):
 			image, _ = data
+			image = image.to(DEVICE)
 			optimizer.zero_grad()
-			print(image.size())
 			outputs = net(image)
 			loss = criterion(outputs, image)
-			print (loss)
 			loss.backward()
 			optimizer.step()
-			break
+
+			if batch_idx % 100 == 0:
+				print("Train Epoch: {} [{}/{} ({:.0f}%)]\tTrain Loss: {:.6f}".format(epoch, batch_idx * len(image), len(train_loader.dataset), 100.*batch_idx/len(train_loader), loss.item()))
 			
 	print('Finished Training')
 
@@ -86,16 +87,14 @@ def train(train_loader, PATH):
 
 	
 def test(test_loader, PATH):
-	net = Net()
+	net = Net().to(DEVICE)
 	net.load_state_dict(torch.load(PATH))
 	with torch.no_grad():
 		for data in testloader:
-			image, labels = data
+			image, _ = data
+			image = image.to(DEVICE) 
 			outputs = net(image)
-			#predicted = 
-			#total +=
-			#correct = 
-
+			break
 
 
 
