@@ -2,7 +2,7 @@ import torch
 import torchvision
 import torch.nn as nn
 import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
+import cv2
 import torch.nn.functional as F
 import numpy as np
 import torch.optim as optim
@@ -23,16 +23,16 @@ def main():
 
 	if (args.mode=='mode_train'):
 		train_dataset = torchvision.datasets.CIFAR10(root='./data', train = True, download = True, transform = transforms.ToTensor())
-		train_loader = torch.utils.data.DataLoader(dataset = train_dataset, batch_size = BATCH_SIZE, shuffle = False)
+		train_loader = torch.utils.data.DataLoader(dataset = train_dataset, batch_size = BATCH_SIZE, shuffle = True)
 		train(train_loader, PATH)
 	elif(args.mode=='mode_test'):
 		test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False, download = True, transform = transforms.ToTensor())
 		test_loader = torch.utils.data.DataLoader(dataset = test_dataset, batch_size = BATCH_SIZE, shuffle = False)
 		test(test_loader, PATH)
-	elif(args.mode=='mode_test2'):
-		test2(PATH)	
+	elif(args.mode=='mode_generate'):
+		Generate(PATH)	
 	else:
-		print("error: type mode_train to train model or mode_test or mode_test2 to test model")
+		print("error: type mode_train to train model or mode_test or mode_generate")
 
 
 
@@ -81,28 +81,29 @@ class VAE(nn.Module):
 		return x
 
 def train(train_loader, PATH):
+	f = open("lossinfo.txt", 'w')
 	DEVICE = torch.device('cpu')
 	net = VAE().to(DEVICE)
 	criterion = nn.MSELoss()
-	optimizer = optim.SGD(net.parameters(), lr = 0.001, momentum = 0.9)
-
+	optimizer = optim.SGD(net.parameters(), lr = 0.01, momentum = 0.9)
 	for epoch in range(0, 1):
 		running_loss = 0.0
 		for batch_idx, data in enumerate(train_loader):
-			image, label = data
-			image = image.to(DEVICE)
-			optimizer.zero_grad()
-			outputs = net(image)
-			loss = criterion(outputs, image)
-			loss.backward()
-			optimizer.step()
-
-			if batch_idx % 100 == 0:
-				print("Train Epoch: {} [{}/{} ({:.0f}%)]\tTrain Loss: {:.6f}".format(epoch, batch_idx * len(image), len(train_loader.dataset), 100.*batch_idx/len(train_loader), loss.item()))
-
-
+			for i in range(100):
+				image, label = data
+				image = image.to(DEVICE)
+				optimizer.zero_grad()
+				outputs = net(image)
+				loss = criterion(outputs, image)
+				loss.backward()
+				optimizer.step()
+				if i==99:
+					f.write("{} loss: {}\n".format(batch_idx, loss))
+#	if batch_idx%10  == 0:
+			print("Train Epoch: {} [{}/{} ({:.0f}%)]\tTrain Loss: {:.6f}".format(epoch, batch_idx * len(image), len(train_loader.dataset), 100.*batch_idx/len(train_loader), loss.item()))
+			if batch_idx==10:
+				break
 	print('Finished Training')
-
 	torch.save(net.state_dict(), PATH)
 
 	
@@ -110,37 +111,55 @@ def test(test_loader, PATH):
 	f = open(resultfile, 'w')
 	net = VAE()
 	net.load_state_dict(torch.load(PATH))
+	criterion = nn.MSELoss()
 	with torch.no_grad():
-		for data in test_loader:
-			image, label = data
-			outputs = net(image)
-			f.write(classes[label[0].item()])
-			f.write(": ")
-			feature = net.encoder(image)
-			f.write(str(feature[0]))
-			f.write("\n")
-			break
+		image, label = iter(test_loader).next()
+		outputs = net(image)
+		loss = criterion(outputs, image)
+		feature = net.encoder(image)
+		f.write("{}: {}\n\n".format(classes[label[0].item()], str(feature[0])))
+		f.write("Loss: {}".format(loss))
+		showimage(image)
+		showimage(outputs)
 
 def parseline(line):
+	parsingClass = [',', ' ', '\n']
 	l=[]
 	a = 0
+	num=True
 	for b, s in enumerate(line):
-		if s == ' ' or s == '\n':
+		if s in parsingClass:
 			t = line[a:b]
-			a = b+1
-			print (t)
-#			l.append(float(s))
-#	return torch.tensor(l)
+			a = b
+			if num==True:
+				print(t)
+				l.append(float(t))
+			num=False
+		else: num=True
+	return torch.tensor(l)
 
-def test2(PATH):
+def Generate(PATH):
 	f1 = open(sourcefile, 'r')
 	line = f1.readline()
-	parseline(line)
-#	print(feature)
-#	net =VAE()
-#	net.load_state_dict(torch.load(PATH))
-#	feature = torch.tensor(source)
-#	outputs = net.decoder(feature)
+	feature = parseline(line)
+	print(feature)
+	net =VAE()
+	net.load_state_dict(torch.load(PATH))
+	with torch.no_grad():
+		outputs = net.decoder(feature)
+		showimage(outputs)
+
+def showimage(tensor):
+	data = tensor.numpy()
+	data = 255*data
+	img = data.astype(np.uint8)
+	img = np.transpose(img[0], (1,2,0))
+	img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+	cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+	cv2.resizeWindow('image', 600,600)
+	cv2.imshow("image", img)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
 
 def saveFeature(f):
 	f = f.numpy()
