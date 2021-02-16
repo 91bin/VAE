@@ -6,23 +6,34 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import numpy as np
 import torch.optim as optim
+import argparse
 
-
+classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 resultfile = "RESULT_DEEP.txt"
+sourcefile = "source.txt"
 
 def main():
+	
+	parser = argparse.ArgumentParser(description='Arguments')
+	parser.add_argument('mode', type=str, help='mode_test or mode_train')
+	args = parser.parse_args()
 	BATCH_SIZE = 64
-
-	train_dataset = torchvision.datasets.CIFAR10(root='./data', train = True, download = True, transform = transforms.ToTensor())
-	test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False, download = True, transform = transforms.ToTensor())
-
-	train_loader = torch.utils.data.DataLoader(dataset = train_dataset, batch_size = BATCH_SIZE, shuffle = False)
-	test_loader = torch.utils.data.DataLoader(dataset = test_dataset, batch_size = BATCH_SIZE, shuffle = False)
-
+	
 	PATH = './cifar_net.pth'
 
-	train(train_loader, PATH)
-	#test(test_loader, PATH)
+	if (args.mode=='mode_train'):
+		train_dataset = torchvision.datasets.CIFAR10(root='./data', train = True, download = True, transform = transforms.ToTensor())
+		train_loader = torch.utils.data.DataLoader(dataset = train_dataset, batch_size = BATCH_SIZE, shuffle = False)
+		train(train_loader, PATH)
+	elif(args.mode=='mode_test'):
+		test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False, download = True, transform = transforms.ToTensor())
+		test_loader = torch.utils.data.DataLoader(dataset = test_dataset, batch_size = BATCH_SIZE, shuffle = False)
+		test(test_loader, PATH)
+	elif(args.mode=='mode_test2'):
+		test2(PATH)	
+	else:
+		print("error: type mode_train to train model or mode_test or mode_test2 to test model")
+
 
 
 
@@ -70,8 +81,6 @@ class VAE(nn.Module):
 		return x
 
 def train(train_loader, PATH):
-	classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-	f = open(resultfile, 'w')
 	DEVICE = torch.device('cpu')
 	net = VAE().to(DEVICE)
 	criterion = nn.MSELoss()
@@ -98,21 +107,40 @@ def train(train_loader, PATH):
 
 	
 def test(test_loader, PATH):
-	net = Net()
+	f = open(resultfile, 'w')
+	net = VAE()
 	net.load_state_dict(torch.load(PATH))
 	with torch.no_grad():
-		for data in testloader:
-			image, _ = data
-			image = image 
+		for data in test_loader:
+			image, label = data
 			outputs = net(image)
 			f.write(classes[label[0].item()])
 			f.write(": ")
 			feature = net.encoder(image)
 			f.write(str(feature[0]))
 			f.write("\n")
-
 			break
 
+def parseline(line):
+	l=[]
+	a = 0
+	for b, s in enumerate(line):
+		if s == ' ' or s == '\n':
+			t = line[a:b]
+			a = b+1
+			print (t)
+#			l.append(float(s))
+#	return torch.tensor(l)
+
+def test2(PATH):
+	f1 = open(sourcefile, 'r')
+	line = f1.readline()
+	parseline(line)
+#	print(feature)
+#	net =VAE()
+#	net.load_state_dict(torch.load(PATH))
+#	feature = torch.tensor(source)
+#	outputs = net.decoder(feature)
 
 def saveFeature(f):
 	f = f.numpy()
